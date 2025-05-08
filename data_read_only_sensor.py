@@ -3,15 +3,13 @@ import struct
 import sys
 import os
 
-FRAMES = 50
-
 dca_name = sys.argv[1]
 n_frames = int(sys.argv[2])
 
-annotated_fname = dca_name.split('.')[0]+'_only_sensor.bin'
+annotated_fname = dca_name.split('.bin')[0]+'_only_sensor.bin'
 FRAMES = n_frames+1
 
-ADC_PARAMS = {'chirps': 128,  # 32
+ADC_PARAMS = {'chirps': 182,  # 32
               'rx': 4,
               'tx': 3,
               'samples': 256,
@@ -24,7 +22,7 @@ element_size = ADC_PARAMS['bytes']
 
 def read_and_print_dca_file(filename, packet_size):
     rows = FRAMES
-    cols = (728 * 1536)  # (N_bytes_in_packet x N_packets_in_frame) Integer division
+    cols = (ADC_PARAMS['chirps']* 4 * 1536)  # (N_bytes_in_packet x N_packets_in_frame) Integer division
     timestamp_infos = []
     # Creating a numpy array of uint16 type, initialized with zeros
     frame_array = np.zeros((rows, cols), dtype=np.uint16)
@@ -48,7 +46,8 @@ def read_and_print_dca_file(filename, packet_size):
         
         packet_idx_in_frame=0
         while True:
-            
+            if index > n_frames:
+                break
             timestamp_data=file.read(8)
             if not timestamp_data:
                 break

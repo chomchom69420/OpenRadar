@@ -5,13 +5,15 @@ import datetime
 import numpy as np
 from mmwave.dataloader import DCA1000
 
-def save_adc_data_to_bin(adc_data, description):
+def save_adc_data_to_bin(adc_data, description, start_time):
     # Get current date and time
-    current_datetime = datetime.datetime.now()
-    formatted_date_time = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-
+    # current_datetime = datetime.datetime.now()
+    # formatted_date_time = current_datetime.strftime("%Y-%m-%d_%H-%M-%S") 
+    
+    #Format start_time to string format
+    
     # Create the filename based on current date, time, and description
-    filename = f"D:\\dataset\\{formatted_date_time}_{description}.bin"
+    filename = f"D:\\dataset\\{start_time}_{description}.bin"
 
     # Save adc_data to a binary file
     adc_data.tofile(filename)
@@ -30,22 +32,22 @@ def main():
     dca = DCA1000()
 
     # Start timing
-    start_time = time.time()
+    start_time = datetime.datetime.now() # NEED This - Add ms-level info 
 
     # Read the ADC data
     adc_data = dca.read(num_frames=args.num_frames)
 
     # End timing
-    end_time = time.time()
-    total_time = end_time - start_time
+    # end_time = time.time()
+    # total_time = end_time - start_time
 
     # Print performance statistics
-    print("Total time: ", total_time)
-    print("FPS:", int(args.num_frames) / total_time)
-    print(adc_data.shape)
+    # print("Total time: ", total_time)
+    # print("FPS:", int(args.num_frames) / total_time)
+    # print(adc_data.shape)
 
     # Save the ADC data to a .bin file
-    save_adc_data_to_bin(adc_data, args.description)
+    save_adc_data_to_bin(adc_data, args.description, start_time)
 
 if __name__ == "__main__":
     main()

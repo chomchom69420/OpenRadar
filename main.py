@@ -25,14 +25,14 @@ import matplotlib.animation as animation
 plt.close('all')
 
 #Filename
-fname = "2024-11-04_16-16-02_surrounding1"
-fname_surr = "2024-11-04_16-42-23_surrounding3"
+fname = "bot_2025-02-11_19_47_42_5objectsday1__only_sensor"
+# fname = "2024-11-04_16-42-23_surrounding3"
 
 # QOL settings
 loadData = True
 loadData_surr = False
 
-numFrames = 50
+numFrames = 301
 numADCSamples = 256
 numTxAntennas = 3
 numRxAntennas = 4
@@ -65,7 +65,7 @@ plotRangeAzimuth = False
 plotAzimuth1D = False
 plotRangeAzimuthTimeSeries = True
 plotRangeDopp = False  
-plot2DscatterXY = False  
+plot2DscatterXY = True  
 plot2DscatterXZ = False  
 plot3Dscatter = False  
 plotCustomPlt = False
@@ -318,115 +318,113 @@ if __name__ == '__main__':
             else:
                 plt.clf()
 
-        # # (3) Doppler Processing 
-        # det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
-        # # print(radar_cube.shape)
+        # (3) Doppler Processing 
+        det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=False, window_type_2d=Window.HAMMING)
+        # print(radar_cube.shape)
         
         
-        # # --- Show output
-        # if plotRangeDopp:
-        #     det_matrix_vis = np.fft.fftshift(det_matrix, axes=1)
-        #     if plotMakeMovie:
-        #         ims.append((plt.imshow(det_matrix_vis / det_matrix_vis.max()),))
-        #     else:
-        #         # print(det_matrix_vis.shape)
-        #         plt.imshow(det_matrix_vis / det_matrix_vis.max())
-        #         plt.title("Range-Doppler plot " + str(i))
-        #         plt.pause(0.05)
-        #         plt.clf()
+        # --- Show output
+        if plotRangeDopp:
+            det_matrix_vis = np.fft.fftshift(det_matrix, axes=1)
+            if plotMakeMovie:
+                ims.append((plt.imshow(det_matrix_vis / det_matrix_vis.max()),))
+            else:
+                # print(det_matrix_vis.shape)
+                plt.imshow(det_matrix_vis / det_matrix_vis.max())
+                plt.title("Range-Doppler plot " + str(i))
+                plt.pause(0.05)
+                plt.clf()
                 
-        
+        # (4) Object Detection
+        # --- CFAR, SNR is calculated as well.
+        fft2d_sum = det_matrix.astype(np.int64)
+        thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
+                                                                  axis=0,
+                                                                  arr=fft2d_sum.T,
+                                                                  l_bound=1.5,
+                                                                  guard_len=4,
+                                                                  noise_len=16)
 
-        # # (4) Object Detection
-        # # --- CFAR, SNR is calculated as well.
-        # fft2d_sum = det_matrix.astype(np.int64)
-        # thresholdDoppler, noiseFloorDoppler = np.apply_along_axis(func1d=dsp.ca_,
-        #                                                           axis=0,
-        #                                                           arr=fft2d_sum.T,
-        #                                                           l_bound=1.5,
-        #                                                           guard_len=4,
-        #                                                           noise_len=16)
+        thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
+                                                              axis=0,
+                                                              arr=fft2d_sum,
+                                                              l_bound=2.5,
+                                                              guard_len=4,
+                                                              noise_len=16)
 
-        # thresholdRange, noiseFloorRange = np.apply_along_axis(func1d=dsp.ca_,
-        #                                                       axis=0,
-        #                                                       arr=fft2d_sum,
-        #                                                       l_bound=2.5,
-        #                                                       guard_len=4,
-        #                                                       noise_len=16)
+        thresholdDoppler, noiseFloorDoppler = thresholdDoppler.T, noiseFloorDoppler.T
+        det_doppler_mask = (det_matrix > thresholdDoppler)
+        det_range_mask = (det_matrix > thresholdRange)
 
-        # thresholdDoppler, noiseFloorDoppler = thresholdDoppler.T, noiseFloorDoppler.T
-        # det_doppler_mask = (det_matrix > thresholdDoppler)
-        # det_range_mask = (det_matrix > thresholdRange)
+        # Get indices of detected peaks
+        full_mask = (det_doppler_mask & det_range_mask)
+        det_peaks_indices = np.argwhere(full_mask == True)
 
-        # # Get indices of detected peaks
-        # full_mask = (det_doppler_mask & det_range_mask)
-        # det_peaks_indices = np.argwhere(full_mask == True)
+        # peakVals and SNR calculation
+        peakVals = fft2d_sum[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
+        snr = peakVals - noiseFloorRange[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
 
-        # # peakVals and SNR calculation
-        # peakVals = fft2d_sum[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
-        # snr = peakVals - noiseFloorRange[det_peaks_indices[:, 0], det_peaks_indices[:, 1]]
+        dtype_location = '(' + str(numTxAntennas) + ',)<f4'
+        dtype_detObj2D = np.dtype({'names': ['rangeIdx', 'dopplerIdx', 'peakVal', 'location', 'SNR'],
+                                   'formats': ['<i4', '<i4', '<f4', dtype_location, '<f4']})
+        detObj2DRaw = np.zeros((det_peaks_indices.shape[0],), dtype=dtype_detObj2D)
+        detObj2DRaw['rangeIdx'] = det_peaks_indices[:, 0].squeeze()
+        detObj2DRaw['dopplerIdx'] = det_peaks_indices[:, 1].squeeze()
+        detObj2DRaw['peakVal'] = peakVals.flatten()
+        detObj2DRaw['SNR'] = snr.flatten()
 
-        # dtype_location = '(' + str(numTxAntennas) + ',)<f4'
-        # dtype_detObj2D = np.dtype({'names': ['rangeIdx', 'dopplerIdx', 'peakVal', 'location', 'SNR'],
-        #                            'formats': ['<i4', '<i4', '<f4', dtype_location, '<f4']})
-        # detObj2DRaw = np.zeros((det_peaks_indices.shape[0],), dtype=dtype_detObj2D)
-        # detObj2DRaw['rangeIdx'] = det_peaks_indices[:, 0].squeeze()
-        # detObj2DRaw['dopplerIdx'] = det_peaks_indices[:, 1].squeeze()
-        # detObj2DRaw['peakVal'] = peakVals.flatten()
-        # detObj2DRaw['SNR'] = snr.flatten()
+        # Further peak pruning. This increases the point cloud density but helps avoid having too many detections around one object.
+        detObj2DRaw = dsp.prune_to_peaks(detObj2DRaw, det_matrix, numDopplerBins, reserve_neighbor=True)
 
-        # # Further peak pruning. This increases the point cloud density but helps avoid having too many detections around one object.
-        # detObj2DRaw = dsp.prune_to_peaks(detObj2DRaw, det_matrix, numDopplerBins, reserve_neighbor=True)
+        # --- Peak Grouping
+        detObj2D = dsp.peak_grouping_along_doppler(detObj2DRaw, det_matrix, numDopplerBins)
+        SNRThresholds2 = np.array([[2, 23], [10, 11.5], [35, 16.0]])
+        peakValThresholds2 = np.array([[4, 275], [1, 400], [500, 0]])
+        detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, numRangeBins, 0.5, range_resolution)
 
-        # # --- Peak Grouping
-        # detObj2D = dsp.peak_grouping_along_doppler(detObj2DRaw, det_matrix, numDopplerBins)
-        # SNRThresholds2 = np.array([[2, 23], [10, 11.5], [35, 16.0]])
-        # peakValThresholds2 = np.array([[4, 275], [1, 400], [500, 0]])
-        # detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, numRangeBins, 0.5, range_resolution)
+        azimuthInput = aoa_input[detObj2D['rangeIdx'], :, detObj2D['dopplerIdx']]
 
-        # azimuthInput = aoa_input[detObj2D['rangeIdx'], :, detObj2D['dopplerIdx']]
+        x, y, z = dsp.naive_xyz(azimuthInput.T)
+        xyzVecN = np.zeros((3, x.shape[0]))
+        xyzVecN[0] = x * range_resolution * detObj2D['rangeIdx']
+        xyzVecN[1] = y * range_resolution * detObj2D['rangeIdx']
+        xyzVecN[2] = z * range_resolution * detObj2D['rangeIdx']
 
-        # x, y, z = dsp.naive_xyz(azimuthInput.T)
-        # xyzVecN = np.zeros((3, x.shape[0]))
-        # xyzVecN[0] = x * range_resolution * detObj2D['rangeIdx']
-        # xyzVecN[1] = y * range_resolution * detObj2D['rangeIdx']
-        # xyzVecN[2] = z * range_resolution * detObj2D['rangeIdx']
+        Psi, Theta, Ranges, xyzVec = dsp.beamforming_naive_mixed_xyz(azimuthInput, detObj2D['rangeIdx'],
+                                                                     range_resolution, method='Bartlett')
 
-        # Psi, Theta, Ranges, xyzVec = dsp.beamforming_naive_mixed_xyz(azimuthInput, detObj2D['rangeIdx'],
-        #                                                              range_resolution, method='Bartlett')
+        # (5) 3D-Clustering
+        # detObj2D must be fully populated and completely accurate right here
+        numDetObjs = detObj2D.shape[0]
+        dtf = np.dtype({'names': ['rangeIdx', 'dopplerIdx', 'peakVal', 'location', 'SNR'],
+                        'formats': ['<f4', '<f4', '<f4', dtype_location, '<f4']})
+        detObj2D_f = detObj2D.astype(dtf)
+        detObj2D_f = detObj2D_f.view(np.float32).reshape(-1, 7)
 
-        # # (5) 3D-Clustering
-        # # detObj2D must be fully populated and completely accurate right here
-        # numDetObjs = detObj2D.shape[0]
-        # dtf = np.dtype({'names': ['rangeIdx', 'dopplerIdx', 'peakVal', 'location', 'SNR'],
-        #                 'formats': ['<f4', '<f4', '<f4', dtype_location, '<f4']})
-        # detObj2D_f = detObj2D.astype(dtf)
-        # detObj2D_f = detObj2D_f.view(np.float32).reshape(-1, 7)
+        # Fully populate detObj2D_f with correct info
+        for i, currRange in enumerate(Ranges):
+            if i >= (detObj2D_f.shape[0]):
+                # copy last row
+                detObj2D_f = np.insert(detObj2D_f, i, detObj2D_f[i - 1], axis=0)
+            if currRange == detObj2D_f[i][0]:
+                detObj2D_f[i][3] = xyzVec[0][i]
+                detObj2D_f[i][4] = xyzVec[1][i]
+                detObj2D_f[i][5] = xyzVec[2][i]
+            else:  # Copy then populate
+                detObj2D_f = np.insert(detObj2D_f, i, detObj2D_f[i - 1], axis=0)
+                detObj2D_f[i][3] = xyzVec[0][i]
+                detObj2D_f[i][4] = xyzVec[1][i]
+                detObj2D_f[i][5] = xyzVec[2][i]
 
-        # # Fully populate detObj2D_f with correct info
-        # for i, currRange in enumerate(Ranges):
-        #     if i >= (detObj2D_f.shape[0]):
-        #         # copy last row
-        #         detObj2D_f = np.insert(detObj2D_f, i, detObj2D_f[i - 1], axis=0)
-        #     if currRange == detObj2D_f[i][0]:
-        #         detObj2D_f[i][3] = xyzVec[0][i]
-        #         detObj2D_f[i][4] = xyzVec[1][i]
-        #         detObj2D_f[i][5] = xyzVec[2][i]
-        #     else:  # Copy then populate
-        #         detObj2D_f = np.insert(detObj2D_f, i, detObj2D_f[i - 1], axis=0)
-        #         detObj2D_f[i][3] = xyzVec[0][i]
-        #         detObj2D_f[i][4] = xyzVec[1][i]
-        #         detObj2D_f[i][5] = xyzVec[2][i]
+                # radar_dbscan(epsilon, vfactor, weight, numPoints)
+        #        cluster = radar_dbscan(detObj2D_f, 1.7, 3.0, 1.69 * 1.7, 3, useElevation=True)
+        if len(detObj2D_f) > 0:
+            cluster = clu.radar_dbscan(detObj2D_f, 0, doppler_resolution, use_elevation=True)
 
-        #         # radar_dbscan(epsilon, vfactor, weight, numPoints)
-        # #        cluster = radar_dbscan(detObj2D_f, 1.7, 3.0, 1.69 * 1.7, 3, useElevation=True)
-        # if len(detObj2D_f) > 0:
-        #     cluster = clu.radar_dbscan(detObj2D_f, 0, doppler_resolution, use_elevation=True)
-
-        #     cluster_np = np.array(cluster['size']).flatten()
-        #     if cluster_np.size != 0:
-        #         if max(cluster_np) > max_size:
-        #             max_size = max(cluster_np)
+            cluster_np = np.array(cluster['size']).flatten()
+            if cluster_np.size != 0:
+                if max(cluster_np) > max_size:
+                    max_size = max(cluster_np)
 
         # (6) Visualization
         if plotRangeDopp:

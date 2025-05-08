@@ -25,3 +25,13 @@ data/
 results/
 
 dataset/
+vicon/
+radar_vicon_frames/
+static_dynamic/
+vel_histograms/
+humara_tracking/
+*.gif
+*.png
+sync_radar_vicon.ipynb 
+vicon_pcd_df.csv 
+vicon_preprocessing.ipynb 

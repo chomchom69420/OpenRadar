@@ -42,7 +42,7 @@ class EKF:
         config.deltaT = .05
         config.maxRadialVelocity = 20
         config.maxAcceleration = 2
-        config.maxNumPoints = 250
+        config.maxNumPoints = 100
         config.maxNumTracks = 20
         config.initialRadialVelocity = 0
 
@@ -68,7 +68,7 @@ class EKF:
         Returns:
             None
         """
-        for distance, azimuth, doppler, snr, idx in zip(ranges, azimuths, dopplers, snrs, range(len(ranges))):
+        for distance, azimuth, doppler, snr, idx in zip(ranges, azimuths, dopplers, snrs, range(100)): #range(len(ranges))):
             self.point_cloud[idx].range = distance
             self.point_cloud[idx].angle = azimuth
             self.point_cloud[idx].doppler = doppler

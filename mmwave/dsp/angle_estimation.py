@@ -880,6 +880,7 @@ def naive_xyz(virtual_ant, num_tx=3, num_rx=4, fft_size=64):
     # Calculate elevation phase shift
     wz = np.angle(peak_1 * peak_2.conj() * np.exp(1j * 2 * wx))
     z_vector = wz / np.pi
+    print(f'value = {1 - x_vector ** 2 - z_vector ** 2}')
     y_vector = np.sqrt(1 - x_vector ** 2 - z_vector ** 2)
     return x_vector, y_vector, z_vector
 

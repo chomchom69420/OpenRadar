@@ -6,12 +6,12 @@ win_size = 950
 radius = 50
 inner_area = win_size - (2 * radius)
 
-min_x = -6
+min_x = -10
 min_y = 0
 min_vx = -.5
 min_vy = -.5
-max_x = 6
-max_y = 6
+max_x = 10
+max_y = 10
 max_vx = .5
 max_vy = .5
 vec_scaling = 75
