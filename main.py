@@ -88,19 +88,12 @@ def get_pcd(det_matrix, aoa_input):
     peakValThresholds2 = np.array([[4, 275], [1, 400], [500, 0]])
     detObj2D = dsp.range_based_pruning(detObj2D, SNRThresholds2, peakValThresholds2, numRangeBins, 0.5, range_resolution)
 
-    # print("detObj2D = ", len(detObj2D))
-
     azimuthInput = aoa_input[detObj2D['rangeIdx'], :, detObj2D['dopplerIdx']]
-
-    # print("azimuthInput.shape =  ", azimuthInput.shape)
-    # print("len(detObj2D['rangeIdx'])", len(detObj2D['rangeIdx']))
 
     Psi, Theta, Ranges, dopplers, xyzVec = dsp.beamforming_naive_mixed_xyz(azimuthInput, detObj2D['rangeIdx'], 
                                                                 detObj2D['dopplerIdx'], 
                                                                 range_resolution, method='Bartlett')
 
-    # print("xyzVec.shape = ", xyzVec)
-    # print("dopplers.shape = ", dopplers.shape)
     return Ranges, dopplers, xyzVec
 
 
@@ -153,31 +146,12 @@ def static_clusters(pointCloud, alpha):
     selected_pdf = pdf_vals[mask]
     mean_kde = np.sum(selected_x * selected_pdf) / np.sum(selected_pdf)
     variance_kde = np.sum((selected_x - mean_kde) ** 2 * selected_pdf) / np.sum(selected_pdf)
-    std_kde = np.sqrt(variance_kde)
-    
-    #Plotting 
-    # if frame_no+1 == 89:
-    #     plt.figure()
-    #     counts, bins, _ = plt.hist(vel_estimates, bins=40, density=False)
-    #     plt.axvline(mode_kde, color='r', linestyle='--', lw=4, label="Mode")
-    #     plt.axvline(mode_kde + std_kde, color='g', linestyle='--', lw=4, label=r'Mode $\pm 1 \sigma$')
-    #     plt.axvline(mode_kde - std_kde, color='g', linestyle='--', lw=4) #, label='Mode -1 Std Dev')
-    #     plt.ylabel("No. of occurances")
-    #     plt.xlabel("Speed (m/s)")
-    #     plt.xlim((-30, 30))
-    #     plt.xticks([-30, -15, 0, 15, 30])
-    #     plt.legend(ncol=2, fontsize=19, loc=(0,1.01))
-    #     plt.tight_layout()
-    #     plt.grid()
-    #     plt.savefig(fname=f'vel_histograms/hist_{frame_no+1}.png', dpi=300)
-    #     sys.exit()
-    
+    std_kde = np.sqrt(variance_kde)    
     static_mask = (mean_kde - std_dev_mult_factor * std_kde < vel_estimates) & (vel_estimates < mean_kde + std_dev_mult_factor * std_kde) 
     static_points = pointCloud[static_mask]
     dynamic_points = pointCloud[~static_mask]
     static_range_bins = static_points[:, 4]
     # static_range_bins = [np.sqrt(static_points[i][0]**2 + static_points[i][1]**2  + static_points[i][2]**2)/range_resolution for i in range(static_points.shape[0])]
-    # print("static_points = ", static_points)
     assert len(static_points)==len(static_range_bins), "Number of static points != Number of range bins"
     return static_points, static_range_bins
 
@@ -202,9 +176,7 @@ def estimate_alpha(pointCloud):
     for point1, point2 in itertools.combinations(pointCloud, 2):
         alpha_list.append(calc_alpha(point1, point2))
     alpha_list = np.array(alpha_list)
-    # for j in range(pointCloud.shape[0]-1):
-    #     alpha_list.append(calc_alpha(pointCloud[j], pointCloud[j+1]))
-
+    
     # Generate histogram
     counts, bin_edges = np.histogram(alpha_list, bins=100, range=(alpha_list.min(), alpha_list.max()))
 
@@ -261,6 +233,7 @@ def solve_equation(phase_cur_frame, xyz_vals, alpha):
     for i,val in enumerate(phase_diff):
         Theta_t=(phase_diff[i]*0.001/3.14)/(3*(Tp+Tc))
         t=3*(i+1)*(Tp+Tc)
+
         #Coefficients
         a_t = t**2
         b_t = -2*K*t
@@ -282,7 +255,6 @@ def get_velocity_antennawise(range_FFT_, range_bin, xyz_vals, alpha):
     phase_per_antenna=[]
     vel_peak=[]
     range_bin = int(range_bin)
-    # print("range_bin = ", range_bin)
     for k in range(0,numLoopsPerFrame):
         r = range_FFT_[k][range_bin].real
         i = range_FFT_[k][range_bin].imag
@@ -306,7 +278,6 @@ def get_velocity(rangeResult, range_bins, static_pcd, alpha):
         for i in range(0,numTxAntennas):
             for j in range(0,numRxAntennas):
                 xyz_vals = static_pcd[k]
-                # print(xyz_vals)
                 cur_velocity=get_velocity_antennawise(rangeResult[i][j], range_bin, xyz_vals, alpha)
                 vel_arr_all_ant.append(cur_velocity)
         vel_array_frame.append(vel_arr_all_ant)
@@ -338,7 +309,7 @@ def update(frame_data):
 
 
 if __name__ == "__main__":
-    # Store plot data
+    # Array to store plot data
     frames_data = []
 
     # dca = init_dca()
@@ -357,104 +328,44 @@ if __name__ == "__main__":
     while i < 50:
         print(i)
         # adc_data = collect_data(dca,1)
+
         # Extract adc_data for the ith frame
         adc_data_frame = adc_data[i]
         adc_data_frame = np.expand_dims(adc_data_frame, axis=0)
-        # print("adc_data_frame.shape = ", adc_data_frame.shape)
         i+=1
+
         try:
             radar_cube = dsp.range_processing(adc_data_frame[0], window_type_1d=Window.BLACKMAN)
             rangefft_out = np.abs(radar_cube).sum(axis=(0,1))
             det_matrix, aoa_input = dsp.doppler_processing(radar_cube, num_tx_antennas=3, clutter_removal_enabled=True, window_type_2d=Window.HAMMING)
             det_matrix_vis = np.fft.fftshift(det_matrix, axes=1)
-            # max_range_index, range_bins, rangeResult = iterative_range_bins_detection(radar_cube)
-            
-            # if i < 5:
-            #     overlapped_range_bins.append(range_bins)
-            #     prev_range_bins = range_bins
-            # else:
-            #     last_frame_idx = len(overlapped_range_bins)
-            #     curr_ranges = set()
-            #     for prev_range_bin in prev_range_bins:
-            #         for cur_range_bin in range_bins:
-            #             if abs(prev_range_bin - cur_range_bin) <= 5:
-            #                 #if within +/- 3, then keep the range bins 
-            #                 curr_ranges.add(cur_range_bin)
-            #     prev_range_bins = range_bins
-            #     overlapped_range_bins.append(np.array(list(curr_ranges)))
-            #     range_bins = overlapped_range_bins[-1]
 
             rangeResult = np.transpose(np.stack([radar_cube[0::3], radar_cube[1::3], radar_cube[2::3]], axis=1),axes=(1,2,0,3))
-            # print("det_matrix.shape = ", det_matrix.shape)
             
-            #Find the PCD 
+            # Find the PCD 
             ranges, dopplers, points = get_pcd(det_matrix, aoa_input)
             points = points.T
-            pointcloud = np.array([[points[i][0], points[i][1], points[i][2], dopplers[i], ranges[i]] for i in range(len(dopplers))])
-            # print(pointcloud.shape)
+            pointcloud = np.array([[points[j][0], points[j][1], points[j][2], dopplers[j], ranges[j]] for j in range(len(dopplers))])
             
-            # print(f"range_bins: {range_bins}, prev_range_bins: {prev_range_bins}, overlapped_range_bins: {overlapped_range_bins}")
-            # Find alpha
+            # Estimate alpha
             alpha = estimate_alpha(pointcloud)
-            # print("alpha = ", alpha)
             
             # Static/dynamic segregation 
             static_pcd, static_range_bins = static_clusters(pointcloud, alpha)
-            # print("static_pcd.shape = ", static_pcd.shape)
-            # print("static_range_bins.shape = ", len(static_range_bins)) 
 
             # Estimate translational speed 
             vel_array_frame = speed_estimation_fn(static_range_bins, rangeResult, static_pcd, alpha)
 
-            # vel_array_frame = speed_estimation_fn(range_bins, rangeResult)
-
-            # print("vel_array_frame", vel_array_frame.shape)
-
+            # -- Plotting: add data for frame i 
             frames_data.append((rangefft_out, det_matrix_vis, vel_array_frame.mean(), i))
         
         except Exception as e:
-            print("areyy yaar")
+            print(e)
             continue
-
-        # if fig is None:
-        #     fig = plt.figure(figsize=(18, 10))
-        #     ax1 = fig.add_subplot(1, 3, 1)
-        #     ax2 = fig.add_subplot(1, 3, 2)
-        #     ax3 = fig.add_subplot(1, 3, 3)
-
-        #     ax_stop = fig.add_axes([0.75, 0.92, 0.1, 0.05])
-        #     ax_start = fig.add_axes([0.87, 0.92, 0.1, 0.05])
-        #     btn_stop = Button(ax_stop, 'Stop')
-        #     btn_start = Button(ax_start, 'Start')
-        #     btn_stop.on_clicked(stop_plot)
-        #     btn_start.on_clicked(start_plot)
-
-        # for ax in [ax1, ax2, ax3]:
-        #     ax.cla()
-
-        # ax1.plot(rangefft_out)
-        # ax1.set_title("RangeFFT")
-
-        # sns.heatmap(det_matrix_vis / det_matrix_vis.max(), ax=ax2, cbar=False, cmap='viridis')
-        # ax2.set_title("Range-doppler Heatmap")
-        # ax3.axis('off')
-        # message = f"Iteration {i+1}/100\nEstimated Speed: {vel_array_frame.mean():.2f}"
-        # ax3.text(0.5, 0.5, message, ha='center', va='center', fontsize=14, fontweight='bold')
-
-        # plt.tight_layout()
-        # plt.pause(0.1)
-
-        # i += 1  
-
-    # plt.ioff()
-    # plt.show()
-
+    
     ani = FuncAnimation(fig, update, frames=frames_data, blit=False, interval=200)
 
-    # To save as MP4 (needs ffmpeg)
+    # Save as MP4 
     ani.save('radar_animation.mp4', writer='ffmpeg', fps=5)
-
-    # OR to save as GIF
-    # ani.save('radar_animation.gif', writer=PillowWriter(fps=5))
 
     plt.close()
