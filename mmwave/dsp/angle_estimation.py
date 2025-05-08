@@ -885,7 +885,7 @@ def naive_xyz(virtual_ant, num_tx=3, num_rx=4, fft_size=64):
     return x_vector, y_vector, z_vector
 
 
-def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, range_resolution, method='Capon', num_vrx=12, est_range=90,
+def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, input_dopplers, range_resolution, method='Capon', num_vrx=12, est_range=90,
                                 est_resolution=1):
     """ This function estimates the XYZ location of a series of input detections by performing beamforming on the
     azimuth axis and naive AOA on the vertical axis.
@@ -934,6 +934,7 @@ def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, range_resolution, m
     output_e_angles = []
     output_a_angles = []
     output_ranges = []
+    output_dopplers = []
 
     for i, inputSignal in enumerate(azimuth_input):
         if method == 'Capon':
@@ -950,6 +951,7 @@ def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, range_resolution, m
         #    num_out, max_theta, total_power = peak_search(doa_spectrum)
         obj_dict, total_power = peak_search_full_variance(doa_spectrum, steering_vec.shape[0], sidelobe_level=0.9)
         num_out = len(obj_dict)
+        # print("num_out = ", num_out)
         max_theta = [obj['peakLoc'] for obj in obj_dict]
 
         estimated_variance = variance_estimation(num_out, est_resolution, obj_dict, total_power)
@@ -989,9 +991,12 @@ def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, range_resolution, m
 
                 output_ranges.append(input_ranges[i])
 
+                output_dopplers.append(input_dopplers[i])
+
     phi = np.array(output_e_angles)
     theta = np.array(output_a_angles)
     ranges = np.array(output_ranges)
+    dopplers = np.array(output_dopplers)
 
     # points could be calculated by trigonometry,
     x = np.sin(np.pi / 180 * theta) * ranges * range_resolution     # x = np.sin(azi) * range
@@ -1001,4 +1006,4 @@ def beamforming_naive_mixed_xyz(azimuth_input, input_ranges, range_resolution, m
     xyz_vec = np.array([x, y, z])
 
     # return phi, theta, ranges
-    return phi, theta, ranges, xyz_vec
+    return phi, theta, ranges, dopplers, xyz_vec
