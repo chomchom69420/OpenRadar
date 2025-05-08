@@ -302,7 +302,7 @@ def update(frame_data):
     ax2.set_title("Range-Doppler Heatmap")
 
     ax3.axis('off')
-    message = f"Iteration {i+1}/100\nEstimated Speed: {vel_mean:.2f} m/s"
+    message = f"Iteration {i+1}/100\nEstimated Speed: {vel_mean:.3f} m/s"
     ax3.text(0.5, 0.5, message, ha='center', va='center', fontsize=14, fontweight='bold')
 
     return ax1, ax2, ax3
